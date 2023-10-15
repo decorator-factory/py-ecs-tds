@@ -127,6 +127,13 @@ class Game {
                 return
             }
             player.health = msg.new_health
+        } else if (msg.type === "player_score_changed") {
+            const player = this.players.get(msg.id)
+            if (!player) {
+                console.error(`Player with ID ${msg.id} not found!`)
+                return
+            }
+            player.score = msg.new_score
         } else if (msg.type === "world_snapshot") {
             for (const player of msg.players) {
                 this.players.set(player.id, {
@@ -136,6 +143,7 @@ class Game {
                     y: player.y,
                     angle: player.angle,
                     health: player.health,
+                    score: player.score,
                 })
             }
             for (const shape of msg.shapes) {
@@ -153,6 +161,7 @@ class Game {
                 y: 0,
                 angle: 0,
                 health: 0,
+                score: 0,
             })
             this.notifications.push({
                 message: `${msg.username} joined`,
@@ -338,17 +347,15 @@ class Game {
 
         const notifWidth = 230
         const notifHeight = 20
-
+        ctx.textAlign = "left"
+        ctx.font = "14pt sans-serif"
         for (const [i, { message, ttl }] of this.notifications.entries()) {
             const opacity = Math.min(ttl, 1.0)
-
             const baseX = this.canvas.width - notifWidth
             const baseY = this.canvas.height - notifHeight * i - notifHeight
             ctx.fillStyle = `rgb(0, 0, 0, ${opacity * 0.7})`
             ctx.fillRect(baseX, baseY, notifWidth, notifHeight)
             ctx.fillStyle = `rgb(255, 255, 255, ${opacity})`
-            ctx.textAlign = "left"
-            ctx.font = "14pt sans-serif"
             ctx.fillText(
                 message,
                 baseX + 4,
@@ -356,7 +363,45 @@ class Game {
                 notifWidth - 4,
             )
         }
+
+        // scoreboard
+        const scoreboardPlayers = (
+            [...this.players.values()]
+            .sort(keyToCmp(({id}) => id))
+            .sort(keyToCmp(({score}) => -score))
+            .slice(0, 5)
+        )
+        const scoreWidth = 230
+        const scoreHeight = 20
+        ctx.textAlign = "left"
+        ctx.font = "14pt sans-serif"
+        for (const [i, { id, username, score }] of scoreboardPlayers.entries()) {
+            const baseX = this.canvas.width - scoreWidth
+            const baseY = scoreHeight * i
+            ctx.fillStyle = "rgb(0, 0, 0, 0.4)"
+            ctx.fillRect(baseX, baseY, scoreWidth, scoreHeight)
+            ctx.fillStyle = "white"
+            ctx.fillText(
+                `#${id} ${username.padEnd(20, ' ')} ${score}`,
+                baseX + 4,
+                baseY + scoreHeight - 4,
+                scoreWidth - 4
+            )
+        }
     }
+}
+
+type KeyFunc<T> = ((t: T) => string) | ((t: T) => number)
+
+const keyToCmp = <T>(key: KeyFunc<T>) => (a: T, b: T) => {
+    const ka = key(a)
+    const kb = key(b)
+    if (ka < kb)
+        return -1
+    else if (ka > kb)
+        return 1
+    else
+        return 0
 }
 
 type Player = {
@@ -366,6 +411,7 @@ type Player = {
     y: number
     angle: number
     health: number
+    score: number
 }
 
 type Box = {
@@ -389,6 +435,7 @@ namespace schema {
         y: number
         angle: number
         health: number
+        score: number
     }
     export type ShapeIntro =
         | { kind: "box"; x: number; y: number; width: number; height: number }
@@ -412,6 +459,11 @@ namespace schema {
               id: number
               new_health: number
           }
+        | {
+            type: "player_score_changed"
+            id: number
+            new_score: number
+        }
         | { type: "bullet_position"; id: number; x: number; y: number }
         | { type: "bullet_gone"; id: number }
         | {

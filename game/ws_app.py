@@ -217,6 +217,7 @@ async def game_loop(
             # Generic
             systems.ttl_system,
             systems.remove_gone_system,
+            systems.clear_notifications_system,
             # Movement and collisions
             systems.movement_system,
             systems.detect_collisions_system,
@@ -228,9 +229,9 @@ async def game_loop(
             # Networking
             systems.networking_system,
             systems.disconnect_players_system,
-            # Health (must be last)
+            # Stats (must be last)
             systems.apply_health_system,
-            systems.clear_health_change_system,
+            systems.apply_score_system,
         )
         _init_buildings(world)
         world.commit()

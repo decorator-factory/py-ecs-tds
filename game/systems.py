@@ -36,6 +36,7 @@ from game.messages import (
     PlayerHealthChanged,
     PlayerIntro,
     PlayerPosition,
+    PlayerScoreChanged,
     Rotate,
     ServerGoodbye,
     ServerMessage,
@@ -75,77 +76,8 @@ FRAME = Resource(int)
 # Components
 
 
-class InputSet(NamedTuple):
-    controls: set[Control]
-
-
-class BoxCollider(NamedTuple):
-    shape: Box
-
-
-class CircleCollider(NamedTuple):
-    shape: Circle
-
-
-class Position(NamedTuple):
-    value: Vec
-
-
-class Orientation(NamedTuple):
-    radians: float
-
-
-class Speed(NamedTuple):
-    magnitude: float
-
-
-class Velocity(NamedTuple):
-    value: Vec
-
-
 class TimeToLive(NamedTuple):
     seconds: float
-
-
-class Collisions(NamedTuple):
-    contacts: list[tuple[Entity, Vec]]
-
-
-class Solid(NamedTuple):
-    pass
-
-
-class Player(NamedTuple):
-    id: int
-    username: str
-
-
-class Health(NamedTuple):
-    points: int
-    modify_queue: list[int]
-
-
-class HealthNotification(NamedTuple):
-    change: int
-    new_points: int
-
-
-class Weapon(NamedTuple):
-    current_cooldown: float
-    delay: float
-
-
-class Bullet(NamedTuple):
-    parent: int
-
-
-class Remote(NamedTuple):
-    client_id: ClientId
-    needs_snapshot: bool
-
-
-class DisconnectRequest(NamedTuple):
-    client_id: ClientId
 
 
 class Fresh(NamedTuple):
@@ -164,6 +96,76 @@ class Gone(NamedTuple):
        message to all the players
     2. on the next frame the bullet shouldn't be able to kill anyone else!
     """
+
+
+class BoxCollider(NamedTuple):
+    shape: Box
+
+
+class CircleCollider(NamedTuple):
+    shape: Circle
+
+
+class Position(NamedTuple):
+    value: Vec
+
+
+class Orientation(NamedTuple):
+    radians: float
+
+
+class Velocity(NamedTuple):
+    value: Vec
+
+
+class Collisions(NamedTuple):
+    contacts: list[tuple[Entity, Vec]]
+
+
+class Solid(NamedTuple):
+    pass
+
+
+class Player(NamedTuple):
+    id: int
+    username: str
+    weapon_cooldown: float = 0
+    score: int = 0
+    last_damage_source: int | None = None
+
+
+class Health(NamedTuple):
+    points: int
+    modify_queue: list[int]
+
+
+class Score(NamedTuple):
+    points: int
+    modify_queue: list[int]
+
+
+class HealthNotification(NamedTuple):
+    change: int
+    new_health: int
+
+
+class ScoreNotification(NamedTuple):
+    change: int
+    new_score: int
+
+
+class Bullet(NamedTuple):
+    parent: int
+
+
+class Remote(NamedTuple):
+    client_id: ClientId
+    needs_snapshot: bool
+    controls: set[Control]
+
+
+class DisconnectRequest(NamedTuple):
+    client_id: ClientId
 
 
 # Systems
@@ -186,9 +188,15 @@ def remove_gone_system(w: World, corpses: Query[Gone]) -> None:
         w.kill(entity)
 
 
-def remove_fresh_system(w: World, newborns: Query[Fresh]) -> None:
-    for entity, _ in newborns.all():
-        w.unapply(entity, [Fresh])
+def clear_notifications_system(
+    w: World,
+    health_notifications: Query[HealthNotification],
+    score_notifications: Query[ScoreNotification],
+    newborns: Query[Fresh],
+) -> None:
+    w.unapply_many((e, [HealthNotification]) for e, _ in health_notifications.all())
+    w.unapply_many((e, [ScoreNotification]) for e, _ in score_notifications.all())
+    w.unapply_many((e, [Fresh]) for e, _ in newborns.all())
 
 
 # Movement and collisions
@@ -242,7 +250,7 @@ def apply_player_collision_system(
     bullets: Query[Bullet],
     corpses: Query[Gone],
 ) -> None:
-    for e, [player_id, *_], health, [pos], [contacts] in collisions.all():
+    for e, player, health, [pos], [contacts] in collisions.all():
         total_push = Vec(0, 0)
         for other, push in contacts:
             if corpses.get(other):
@@ -252,8 +260,10 @@ def apply_player_collision_system(
                 total_push += push
 
             if b := bullets.get(other):
-                if b[0].parent != player_id:
+                shooter_id = b[0].parent
+                if shooter_id != player.id:
                     health.modify_queue.append(-1)
+                    w.schedule_tweak(e, Player, lambda p: p._replace(last_damage_source=shooter_id))
                     w.apply(other, [Gone()])
         w.schedule_tweak(e, Position, lambda p, dp=total_push: Position(p.value + dp))
 
@@ -297,50 +307,81 @@ _directions = {
     Control.up: Vec(0, -1),
 }
 
+_FIRE_DELAY = 0.5
+_SPEED = 200
+
 
 def apply_inputs_system(
     w: World,
-    items: Query[Player, Orientation, Weapon, Position, InputSet, Speed],
+    items: Query[Player, Orientation, Position, Remote],
 ) -> None:
-    for e, [player_id, *_], [angle], [cooldown, delay], [pos], [controls], [speed] in items.all():
+    for e, player, [angle], [pos], remote in items.all():
         direction = Vec(0, 0)
-        for control in controls:
+        for control in remote.controls:
             direction += _directions.get(control) or Vec(0, 0)
 
-        if cooldown > 0:
-            w.apply(e, [Weapon(current_cooldown=cooldown - w[TIME_DELTA], delay=delay)])
-        elif Control.fire in controls:
-            _spawn_bullet(w, parent=player_id, pos=pos, angle=angle)
-            w.apply(e, [Weapon(current_cooldown=delay, delay=delay)])
+        if player.weapon_cooldown > 0:
+            w.apply(e, [player._replace(weapon_cooldown=player.weapon_cooldown - w[TIME_DELTA])])
+        elif Control.fire in remote.controls:
+            _spawn_bullet(w, parent=player.id, pos=pos, angle=angle)
+            w.apply(e, [player._replace(weapon_cooldown=_FIRE_DELAY)])
 
-        w.apply(e, [Velocity(direction.normal() * speed)])
+        w.apply(e, [Velocity(direction.normal() * _SPEED)])
 
 
-## User health
+## User stats
 
 
 def apply_health_system(
     w: World,
     players: Query[Player, Health],
     corpses: Query[Gone],
+    scores: Query[Score],
 ) -> None:
-    for e, [player_id, *_], health in players.all():
+    player_id_to_entity = {
+        player.id: e
+        for e, player, _ in players.all()
+    }
+
+    for e, player, health in players.all():
         if not corpses.get(e):
             delta = sum(health.modify_queue)
             new_hp = health.points + delta
             if new_hp <= 0:
-                w.apply(e, [Health(0, [])])
-                w.apply(e, [Gone()])
+                # Dead
+                w.apply(
+                    e,
+                    [
+                        Health(0, []),
+                        Gone(),
+                    ],
+                )
+                if killer_id := player.last_damage_source:
+                    if killer_entity := player_id_to_entity.get(killer_id):
+                        if score_tuple := scores.get(killer_entity):
+                            [score] = score_tuple
+                            score.modify_queue.append(1)
             elif health.modify_queue:
-                w.apply(e, [Health(new_hp, [])])
-                w.apply(e, [HealthNotification(change=delta, new_points=new_hp)])
+                w.apply(
+                    e, [Health(new_hp, []), HealthNotification(change=delta, new_health=new_hp)]
+                )
 
 
-def clear_health_change_system(
+def apply_score_system(
     w: World,
-    changes: Query[HealthNotification],
+    scores: Query[Score],
 ) -> None:
-    w.unapply_many((e, [HealthNotification]) for e, _ in changes.all())
+    for e, [points, queue] in scores.all():
+        if queue:
+            delta = sum(queue)
+            new_points = points + delta
+            w.apply(
+                e,
+                [
+                    Score(new_points, []),
+                    ScoreNotification(delta, new_points),
+                ],
+            )
 
 
 ## Networking
@@ -348,25 +389,30 @@ def clear_health_change_system(
 
 def networking_system(
     w: World,
-    remotes: Query[Remote, InputSet],
-    players: Query[Player, Position, Orientation, Health],
+    remotes: Query[Remote],
+    players: Query[Player, Position, Orientation, Health, Score],
     circles: Query[Solid, Position, CircleCollider],
     boxes: Query[Solid, Position, BoxCollider],
     bullets: Query[Bullet, Position],
     corpses: Query[Gone],
     newborns: Query[Fresh],
     health_notes: Query[HealthNotification],
+    score_notes: Query[ScoreNotification],
 ) -> None:
     inbox = w[NET_INBOX]
     outbox = w[NET_OUTBOX]
 
-    for e, [player_id, *_], [pos], [angle], [hp, *_] in players.all():
+    for e, [player_id, *_], [pos], [angle], [hp, *_], [score, *_] in players.all():
         if newborns.get(e):
             outbox.send_broadcast(PlayerHealthChanged(player_id, hp))
 
-        if note_tuple := health_notes.get(e):
-            [change] = note_tuple
-            outbox.send_broadcast(PlayerHealthChanged(player_id, change.new_points))
+        if health_note_tuple := health_notes.get(e):
+            [change] = health_note_tuple
+            outbox.send_broadcast(PlayerHealthChanged(player_id, change.new_health))
+
+        if score_note_tuple := score_notes.get(e):
+            [change] = score_note_tuple
+            outbox.send_broadcast(PlayerScoreChanged(player_id, change.new_score))
 
         if corpses.get(e):
             outbox.send_broadcast(PlayerDied(player_id))
@@ -381,14 +427,14 @@ def networking_system(
 
     snapshot: ServerMessage | None = None
 
-    for e, [client_id, needs_snapshot], [inputs] in remotes.all():
+    for e, [client_id, needs_snapshot, controls] in remotes.all():
         for msg in inbox.pop(client_id):
             match msg:
                 case InputDown(control):
-                    inputs.add(control)
+                    controls.add(control)
 
                 case InputUp(control):
-                    inputs.discard(control)
+                    controls.discard(control)
 
                 case Rotate(radians):
                     w.apply(e, [Orientation(radians)])
@@ -397,15 +443,15 @@ def networking_system(
             if snapshot is None:
                 snapshot = _compute_snapshot_message(
                     players=(
-                        (pos, player, angle, health)
-                        for _, player, [pos], angle, health in players.all()
+                        (pos, player, angle, health, score)
+                        for _, player, [pos], angle, health, score in players.all()
                     ),
                     circles=((pos, circle) for _, _, [pos], [circle] in circles.all()),
                     boxes=((pos, box) for _, _, [pos], [box] in boxes.all()),
                 )
 
             outbox.send_single(client_id, snapshot)
-            w.apply(e, [Remote(client_id, needs_snapshot=False)])
+            w.apply(e, [Remote(client_id, needs_snapshot=False, controls=controls)])
 
 
 def disconnect_players_system(
@@ -474,16 +520,14 @@ def connect_new_player(
     username: str,
 ) -> None:
     w.spawn(
-        Player(id=client_id.value, username=username),
-        Weapon(current_cooldown=0, delay=0.5),
+        Player(id=client_id.value, username=username, weapon_cooldown=0),
         Position(Vec(200 + random.random() * 30, 200 + random.random() * 30)),
         Orientation(radians=0),
         Velocity(Vec(0, 0)),
-        Remote(client_id, needs_snapshot=True),
-        InputSet(set()),
+        Remote(client_id, needs_snapshot=True, controls=set()),
         CircleCollider(Circle(Vec(0, 0), radius=20)),
         Health(points=5, modify_queue=[]),
-        Speed(200),
+        Score(0, []),
         Fresh(),
     )
 
@@ -496,7 +540,7 @@ def disconnect_player(
 
 
 def _compute_snapshot_message(
-    players: Iterable[tuple[Vec, Player, Orientation, Health]],
+    players: Iterable[tuple[Vec, Player, Orientation, Health, Score]],
     circles: Iterable[tuple[Vec, Circle]],
     boxes: Iterable[tuple[Vec, Box]],
 ) -> ServerMessage:
@@ -508,8 +552,8 @@ def _compute_snapshot_message(
 
     return WorldSnapshot(
         players=[
-            PlayerIntro(player.id, player.username, pos.x, pos.y, angle, health)
-            for pos, player, [angle], [health, *_] in players
+            PlayerIntro(player.id, player.username, pos.x, pos.y, angle, health, score)
+            for pos, player, [angle], [health, *_], [score, *_] in players
         ],
         shapes=circle_intros + box_intros,
     )
