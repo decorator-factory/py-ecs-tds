@@ -279,7 +279,7 @@ def apply_bullet_collision_system(
     for e, _, [velocity], [contacts] in collisions.all():
         for other, push in contacts:
             if solids.get(other):
-                if -0.6 <= velocity.alignment(push) <= 0.6:
+                if -0.75 <= velocity.alignment(push) <= 0.75:
                     # Ricochet
                     w.schedule_tweak(
                         e,
@@ -288,13 +288,17 @@ def apply_bullet_collision_system(
                     )
                     w.schedule_tweak(e, Position, lambda p, push=push: Position(p.value + push * 3))
                     w.schedule_tweak(e, Bullet, lambda b: b._replace(is_supercharged=True))
+                    w.schedule_tweak(e, TimeToLive, lambda ttl: TimeToLive(1.0))
                     w.apply(e, [CircleCollider(Circle(Vec(0, 0), 6))])
                 else:
                     w.apply(e, [Gone()])
 
 
+_SJR_SPEED = 700
+
+
 def _apply_ricochet(vel: Vec, push: Vec) -> Vec:
-    return (vel + push * 100).normal() * vel.length()
+    return (vel + push * 90).normal() * _SJR_SPEED
 
 
 def movement_system(
@@ -421,7 +425,7 @@ def networking_system(
 
         if corpses.get(e):
             outbox.send_broadcast(PlayerDied(player_id))
-        elif w[FRAME] % 2 == 0:  # JANKY HACK
+        elif w[FRAME] % 4 == 0:  # JANKY HACK
             outbox.send_broadcast(PlayerPosition(id=player_id, x=pos.x, y=pos.y, angle=angle))
 
     for e, bullet, [pos] in bullets.all():
@@ -484,7 +488,7 @@ def disconnect_players_system(
 
 def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
     direction = Vec.from_angle(angle)
-    velocity = direction * 700
+    velocity = direction * 800
     w.spawn(
         Position(pos + direction * 21),
         Velocity(velocity),
