@@ -365,27 +365,28 @@ class Game {
         }
 
         // scoreboard
-        const scoreboardPlayers = (
-            [...this.players.values()]
-            .sort(keyToCmp(({id}) => id))
-            .sort(keyToCmp(({score}) => -score))
+        const scoreboardPlayers = [...this.players.values()]
+            .sort(keyToCmp(({ id }) => id))
+            .sort(keyToCmp(({ score }) => -score))
             .slice(0, 5)
-        )
         const scoreWidth = 230
         const scoreHeight = 20
         ctx.textAlign = "left"
         ctx.font = "14pt sans-serif"
-        for (const [i, { id, username, score }] of scoreboardPlayers.entries()) {
+        for (const [
+            i,
+            { id, username, score },
+        ] of scoreboardPlayers.entries()) {
             const baseX = this.canvas.width - scoreWidth
             const baseY = scoreHeight * i
             ctx.fillStyle = "rgb(0, 0, 0, 0.4)"
             ctx.fillRect(baseX, baseY, scoreWidth, scoreHeight)
             ctx.fillStyle = "white"
             ctx.fillText(
-                `#${id} ${username.padEnd(20, ' ')} ${score}`,
+                `#${id} ${username.padEnd(20, " ")} ${score}`,
                 baseX + 4,
                 baseY + scoreHeight - 4,
-                scoreWidth - 4
+                scoreWidth - 4,
             )
         }
     }
@@ -393,16 +394,15 @@ class Game {
 
 type KeyFunc<T> = ((t: T) => string) | ((t: T) => number)
 
-const keyToCmp = <T>(key: KeyFunc<T>) => (a: T, b: T) => {
-    const ka = key(a)
-    const kb = key(b)
-    if (ka < kb)
-        return -1
-    else if (ka > kb)
-        return 1
-    else
-        return 0
-}
+const keyToCmp =
+    <T>(key: KeyFunc<T>) =>
+    (a: T, b: T) => {
+        const ka = key(a)
+        const kb = key(b)
+        if (ka < kb) return -1
+        else if (ka > kb) return 1
+        else return 0
+    }
 
 type Player = {
     id: number
@@ -460,10 +460,10 @@ namespace schema {
               new_health: number
           }
         | {
-            type: "player_score_changed"
-            id: number
-            new_score: number
-        }
+              type: "player_score_changed"
+              id: number
+              new_score: number
+          }
         | { type: "bullet_position"; id: number; x: number; y: number }
         | { type: "bullet_gone"; id: number }
         | {

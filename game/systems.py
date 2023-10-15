@@ -338,10 +338,7 @@ def apply_health_system(
     corpses: Query[Gone],
     scores: Query[Score],
 ) -> None:
-    player_id_to_entity = {
-        player.id: e
-        for e, player, _ in players.all()
-    }
+    player_id_to_entity = {player.id: e for e, player, _ in players.all()}
 
     for e, player, health in players.all():
         if not corpses.get(e):
