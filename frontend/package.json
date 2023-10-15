@@ -1,0 +1,17 @@
+{
+    "name": "canvas-tutorial",
+    "version": "1.0.0",
+    "description": "",
+    "scripts": {
+        "lint": "prettier --write src/",
+        "build": "parcel build src/index.html",
+        "watch": "parcel serve src/index.html"
+    },
+    "author": "",
+    "license": "MPL-2.0",
+    "devDependencies": {
+        "parcel": "^2.10.0",
+        "prettier": "^3.0.3",
+        "typescript": "^5.2.2"
+    }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>The Game (you lost)</title>
+    </head>
+    <body>
+        <input type="text" id="username-input" placeholder="Username" />
+        <button id="connect-button">Connect</button>
+        <canvas
+            id="game"
+            width="1"
+            height="1"
+            style="border: 1px solid black"
+        ></canvas>
+        <script type="module">
+            import { main } from "./index.ts"
+
+            main({
+                input: document.getElementById("username-input"),
+                button: document.getElementById("connect-button"),
+                canvas: document.getElementById("game"),
+            })
+        </script>
+    </body>
+</html>
