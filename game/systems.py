@@ -316,7 +316,7 @@ _directions = {
 }
 
 _FIRE_DELAY = 0.5
-_SPEED = 200
+_SPEED = 270
 
 
 def apply_inputs_system(
@@ -484,13 +484,13 @@ def disconnect_players_system(
 
 def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
     direction = Vec.from_angle(angle)
-    velocity = direction * 600
+    velocity = direction * 700
     w.spawn(
         Position(pos + direction * 21),
         Velocity(velocity),
         CircleCollider(Circle(Vec(0, 0), radius=4)),
         Bullet(parent, is_supercharged=False),
-        TimeToLive(0.5),
+        TimeToLive(0.55),
         Fresh(),
     )
 
