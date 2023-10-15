@@ -217,6 +217,10 @@ class Game {
             ArrowRight: "right",
             ArrowDown: "down",
             ArrowUp: "up",
+            KeyA: "left",
+            KeyD: "right",
+            KeyS: "down",
+            KeyW: "up",
         }
 
         this.canvas.addEventListener("mousedown", (e) => {
@@ -243,7 +247,7 @@ class Game {
         })
 
         window.addEventListener("keydown", (e) => {
-            const control = keyToControl[e.key]
+            const control = keyToControl[e.code]
             if (control && !controls.has(control)) {
                 controls.add(control)
                 this.sendMessage({ type: "input_down", control })
@@ -251,7 +255,7 @@ class Game {
         })
 
         window.addEventListener("keyup", (e) => {
-            const control = keyToControl[e.key]
+            const control = keyToControl[e.code]
             if (control && controls.has(control)) {
                 controls.delete(control)
                 this.sendMessage({ type: "input_up", control })
