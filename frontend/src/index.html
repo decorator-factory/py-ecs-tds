@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>The Game (you lost)</title>
+        <title>Super Janky Ricochet</title>
         <style>
             * {
                 font-family: "sans-serif";
@@ -19,9 +19,18 @@
             height="1"
             style="border: 1px solid black"
         ></canvas>
-        <ul>
+        <ul style="max-width: 30em">
             <li>Use arrow keys to move</li>
             <li>Press left mouse button to shoot</li>
+            <li>
+                If a bullet doesn't hit a wall head on but only skims it, it
+                activates
+                <marquee style="color: rgb(217, 57, 33)"
+                    >SUPER JANKY RICOCHET</marquee
+                ><br />An <b>S. J. R.</b>-enriched bullet takes away
+                <span style="font-size: 1.3rem">5 hit points</span>
+                instead of just one.
+            </li>
         </ul>
         <script type="module">
             import { main } from "./index.ts"

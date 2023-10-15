@@ -155,6 +155,7 @@ class ScoreNotification(NamedTuple):
 
 class Bullet(NamedTuple):
     parent: int
+    is_supercharged: bool
 
 
 class Remote(NamedTuple):
@@ -259,10 +260,13 @@ def apply_player_collision_system(
                 total_push += push
 
             if b := bullets.get(other):
-                shooter_id = b[0].parent
-                if shooter_id != player.id:
-                    health.modify_queue.append(-1)
-                    w.schedule_tweak(e, Player, lambda p: p._replace(last_damage_source=shooter_id))
+                [bullet] = b
+                if bullet.parent != player.id:
+                    damage = 5 if bullet.is_supercharged else 1
+                    health.modify_queue.append(-damage)
+                    w.schedule_tweak(
+                        e, Player, lambda p: p._replace(last_damage_source=bullet.parent)
+                    )
                     w.apply(other, [Gone()])
         w.schedule_tweak(e, Position, lambda p, dp=total_push: Position(p.value + dp))
 
@@ -272,20 +276,25 @@ def apply_bullet_collision_system(
     collisions: Query[Bullet, Velocity, Collisions],
     solids: Query[Solid],
 ) -> None:
-    w[TIME_DELTA]
     for e, _, [velocity], [contacts] in collisions.all():
         for other, push in contacts:
             if solids.get(other):
-                if -0.6 <= velocity.alignment(push) <= 0.6:
+                if -0.5 <= velocity.alignment(push) <= 0.5:
                     # Ricochet
                     w.schedule_tweak(
                         e,
                         Velocity,
-                        lambda v, push=push: Velocity((v.value + push * 100) * 0.9),
+                        lambda v, push=push: Velocity(_apply_ricochet(v.value, push)),
                     )
                     w.schedule_tweak(e, Position, lambda p, push=push: Position(p.value + push * 3))
+                    w.schedule_tweak(e, Bullet, lambda b: b._replace(is_supercharged=True))
+                    w.apply(e, [CircleCollider(Circle(Vec(0, 0), 6))])
                 else:
                     w.apply(e, [Gone()])
+
+
+def _apply_ricochet(vel: Vec, push: Vec) -> Vec:
+    return (vel + push * 100).normal() * vel.length()
 
 
 def movement_system(
@@ -415,11 +424,11 @@ def networking_system(
         elif w[FRAME] % 2 == 0:  # JANKY HACK
             outbox.send_broadcast(PlayerPosition(id=player_id, x=pos.x, y=pos.y, angle=angle))
 
-    for e, _, [pos] in bullets.all():
+    for e, bullet, [pos] in bullets.all():
         if corpses.get(e):
             outbox.send_broadcast(BulletGone(e.num))
         elif w[FRAME] % 2 == 0:  # JANKY HACK
-            outbox.send_broadcast(BulletPosition(e.num, pos.x, pos.y))
+            outbox.send_broadcast(BulletPosition(e.num, pos.x, pos.y, bullet.is_supercharged))
 
     snapshot: ServerMessage | None = None
 
@@ -480,7 +489,7 @@ def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
         Position(pos + direction * 21),
         Velocity(velocity),
         CircleCollider(Circle(Vec(0, 0), radius=4)),
-        Bullet(parent),
+        Bullet(parent, is_supercharged=False),
         TimeToLive(0.5),
         Fresh(),
     )
@@ -523,7 +532,7 @@ def connect_new_player(
         Velocity(Vec(0, 0)),
         Remote(client_id, needs_snapshot=True, controls=set()),
         CircleCollider(Circle(Vec(0, 0), radius=16)),
-        Health(points=5, modify_queue=[]),
+        Health(points=10, modify_queue=[]),
         Score(0, []),
         Fresh(),
     )

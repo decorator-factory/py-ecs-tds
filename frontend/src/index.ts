@@ -75,7 +75,10 @@ class Debouncer<T> {
 
 class Game {
     private players: Map<number, Player>
-    private bullets: Map<number, { x: number; y: number }>
+    private bullets: Map<
+        number,
+        { x: number; y: number; isSupercharged: boolean }
+    >
     private boxes: Box[]
     private circles: Circle[]
     private notifications: Notification[]
@@ -184,7 +187,11 @@ class Game {
             })
             this.players.delete(msg.id)
         } else if (msg.type === "bullet_position") {
-            this.bullets.set(msg.id, { x: msg.x, y: msg.y })
+            this.bullets.set(msg.id, {
+                x: msg.x,
+                y: msg.y,
+                isSupercharged: msg.is_supercharged,
+            })
         } else if (msg.type === "bullet_gone") {
             this.bullets.delete(msg.id)
         } else if (msg.type === "bad_message") {
@@ -273,11 +280,23 @@ class Game {
         const ctx = this.canvas.getContext("2d")!
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
 
-        ctx.fillStyle = "black"
-        for (const { x, y } of this.bullets.values()) {
-            ctx.beginPath()
-            ctx.arc(x, y, 4, 0, Math.PI * 2)
-            ctx.fill()
+        for (const { x, y, isSupercharged } of this.bullets.values()) {
+            if (isSupercharged) {
+                ctx.beginPath()
+                ctx.fillStyle = "rgba(255, 119, 56)"
+                ctx.arc(x, y, 6, 0, Math.PI * 2)
+                ctx.fill()
+
+                ctx.beginPath()
+                ctx.fillStyle = "rgb(217, 57, 33)"
+                ctx.arc(x, y, 4, 0, Math.PI * 2)
+                ctx.fill()
+            } else {
+                ctx.beginPath()
+                ctx.fillStyle = "black"
+                ctx.arc(x, y, 4, 0, Math.PI * 2)
+                ctx.fill()
+            }
         }
 
         ctx.fillStyle = "#2e80db"
@@ -462,7 +481,13 @@ namespace schema {
               id: number
               new_score: number
           }
-        | { type: "bullet_position"; id: number; x: number; y: number }
+        | {
+              type: "bullet_position"
+              id: number
+              x: number
+              y: number
+              is_supercharged: boolean
+          }
         | { type: "bullet_gone"; id: number }
         | {
               type: "world_snapshot"

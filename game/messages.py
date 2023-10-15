@@ -97,6 +97,7 @@ class BulletPosition:
     id: int
     x: float
     y: float
+    is_supercharged: bool
 
 
 @frozen
