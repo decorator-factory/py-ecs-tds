@@ -1,4 +1,5 @@
 from __future__ import annotations
+import random
 
 import time
 from contextlib import (
@@ -199,9 +200,66 @@ class Ticker:
 
 
 def _init_buildings(w: systems.World) -> None:
-    systems.add_solid_box(w, Box(Vec(50, 200), Vec(90, 400)))
-    systems.add_solid_box(w, Box(Vec(50, 270), Vec(150, 330)))
-    systems.add_solid_circle(w, Circle(Vec(500, 300), 80))
+    width = 1200
+    height = 600
+
+    shapes = []
+
+
+    top = Box(Vec(-10, -10), Vec(width + 10, 0))
+    left = Box(Vec(-10, -10), Vec(0, height + 10))
+    right = left.shift(Vec(width + 10, 0))
+    bottom = top.shift(Vec(0, height + 10))
+
+    shapes = [
+        # Borders
+        left,
+        right,
+        top,
+        bottom,
+
+        # Main circle
+        Circle(Vec(600, 300), 90),
+        Circle(Vec(630, 80), 20),
+
+        # Right whistle
+        Circle(Vec(790, 115), 50),
+        Box(Vec(790, 115), Vec(840, 325)),
+
+        # Right slit
+        Box(Vec(730, 370), Vec(743, 455)),
+        Box(Vec(700, 485), Vec(713, 560)),
+
+        # Bottom-right long wall
+        Box(Vec(840, 485), Vec(1110, 510)),
+
+        # Garbage on the right
+        Circle(Vec(955, 345), 30),
+        Circle(Vec(1070, 300), 30),
+        Box(Vec(930, 200), Vec(980, 250)),
+        Circle(Vec(1000, 100), 40),
+
+        # Top-left long wall
+        Box(Vec(62, 76), Vec(390, 130)),
+
+        # Left whistle
+        Circle(Vec(320, 450), 50),
+        Box(Vec(270, 380), Vec(320, 450)),
+        Box(Vec(270, 290), Vec(320, 340)),
+
+        # Litte circle boi
+        Circle(Vec(155, 450), 20)
+    ]
+
+    for shape in shapes:
+        if isinstance(shape, Circle):
+            systems.add_solid_circle(w, shape)
+        else:
+            systems.add_solid_box(w, shape)
+
+    # systems.add_solid_box(w, Box(Vec(50, 200), Vec(90, 400)))
+    # systems.add_solid_box(w, Box(Vec(50, 270), Vec(150, 330)))
+    # systems.add_solid_circle(w, Circle(Vec(500, 300), 80))
 
 
 async def game_loop(
@@ -236,6 +294,12 @@ async def game_loop(
         _init_buildings(world)
         world.commit()
 
+        spawn_points = (
+            Vec(210, 170),
+            Vec(1080, 170),
+            Vec(524, 510),
+            Vec(500, 75),        )
+
         ticker = Ticker(fps)
 
         world[systems.FRAME] = 0
@@ -243,7 +307,12 @@ async def game_loop(
         last_simulation = time.monotonic()
         while True:
             for client_id in state.join_queue().pop():
-                systems.connect_new_player(world, client_id, state.username(client_id))
+                systems.connect_new_player(
+                    world,
+                    client_id,
+                    state.username(client_id),
+                    spawn_point=random.choice(spawn_points),
+                )
 
             for client_id in state.leave_queue().pop():
                 systems.disconnect_player(world, client_id)

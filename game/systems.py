@@ -480,7 +480,7 @@ def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
     w.spawn(
         Position(pos + direction * 21),
         Velocity(velocity),
-        CircleCollider(Circle(Vec(0, 0), radius=4)),
+        CircleCollider(Circle(Vec(0, 0), radius=3)),
         Bullet(parent),
         TimeToLive(1.0),
         Fresh(),
@@ -515,14 +515,15 @@ def connect_new_player(
     w: World,
     client_id: ClientId,
     username: str,
+    spawn_point: Vec,
 ) -> None:
     w.spawn(
         Player(id=client_id.value, username=username, weapon_cooldown=0),
-        Position(Vec(200 + random.random() * 30, 200 + random.random() * 30)),
+        Position(spawn_point),
         Orientation(radians=0),
         Velocity(Vec(0, 0)),
         Remote(client_id, needs_snapshot=True, controls=set()),
-        CircleCollider(Circle(Vec(0, 0), radius=20)),
+        CircleCollider(Circle(Vec(0, 0), radius=16)),
         Health(points=5, modify_queue=[]),
         Score(0, []),
         Fresh(),

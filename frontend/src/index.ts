@@ -223,8 +223,6 @@ class Game {
             this.sendMessage({ type: "input_up", control: "fire" })
         })
 
-        const recomputeAngle = () => {}
-
         this.canvas.addEventListener("mousemove", (e) => {
             const me = this.myPlayer()
             if (me === null) return
@@ -278,16 +276,16 @@ class Game {
         ctx.fillStyle = "black"
         for (const { x, y } of this.bullets.values()) {
             ctx.beginPath()
-            ctx.arc(x, y, 4, 0, Math.PI * 2)
+            ctx.arc(x, y, 3, 0, Math.PI * 2)
             ctx.fill()
         }
 
-        ctx.fillStyle = "cyan"
+        ctx.fillStyle = "#2e80db"
         for (const { x, y, width, height } of this.boxes) {
             ctx.fillRect(x, y, width, height)
         }
 
-        ctx.fillStyle = "cyan"
+        ctx.fillStyle = "#2e80db"
         for (const { x, y, radius } of this.circles) {
             ctx.beginPath()
             ctx.arc(x, y, radius, 0, Math.PI * 2)
@@ -300,7 +298,7 @@ class Game {
             // body
             ctx.fillStyle = "red"
             ctx.beginPath()
-            ctx.arc(x, y, 20, 0, Math.PI * 2)
+            ctx.arc(x, y, 16, 0, Math.PI * 2)
             ctx.fill()
 
             // eyes
@@ -312,8 +310,8 @@ class Game {
                 ctx.beginPath()
                 ctx.fillStyle = "white"
                 ctx.arc(
-                    x + Math.cos(a) * 16,
-                    y + Math.sin(a) * 16,
+                    x + Math.cos(a) * 11,
+                    y + Math.sin(a) * 11,
                     4,
                     0,
                     Math.PI * 2,
@@ -323,8 +321,8 @@ class Game {
                 ctx.beginPath()
                 ctx.fillStyle = "black"
                 ctx.arc(
-                    x + Math.cos(a) * 18,
-                    y + Math.sin(a) * 18,
+                    x + Math.cos(a) * 12,
+                    y + Math.sin(a) * 12,
                     2,
                     0,
                     Math.PI * 2,
