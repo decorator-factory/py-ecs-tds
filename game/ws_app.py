@@ -296,11 +296,12 @@ async def game_loop(
         last_simulation = time.monotonic()
         while True:
             for client_id in state.join_queue().pop():
+                tweak = Vec(random.random() * 10 - 5, random.random() * 10 - 5)
                 systems.connect_new_player(
                     world,
                     client_id,
                     state.username(client_id),
-                    spawn_point=random.choice(spawn_points),
+                    spawn_point=random.choice(spawn_points) + tweak,
                 )
 
             for client_id in state.leave_queue().pop():
