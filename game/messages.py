@@ -110,12 +110,19 @@ class PlayerDied:
 
 
 @frozen
+class PlayerHealthChanged:
+    id: int
+    new_health: int
+
+
+@frozen
 class PlayerIntro:
     id: int
     username: str
     x: float
     y: float
     angle: float
+    health: int
 
 
 @frozen
@@ -152,6 +159,7 @@ ServerMessage = Union[
     PlayerJoined,
     PlayerLeft,
     PlayerPosition,
+    PlayerHealthChanged,
     PlayerDied,
     BulletPosition,
     BulletGone,
@@ -166,6 +174,7 @@ SERVER_MESSAGES: dict[type[ServerMessage], str] = {
     PlayerJoined: "player_joined",
     PlayerLeft: "player_left",
     PlayerPosition: "player_position",
+    PlayerHealthChanged: "player_health_changed",
     PlayerDied: "player_died",
     BulletPosition: "bullet_position",
     BulletGone: "bullet_gone",

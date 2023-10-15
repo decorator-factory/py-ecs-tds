@@ -120,6 +120,13 @@ class Game {
             player.x = msg.x
             player.y = msg.y
             player.angle = msg.angle
+        } else if (msg.type === "player_health_changed") {
+            const player = this.players.get(msg.id)
+            if (!player) {
+                console.error(`Player with ID ${msg.id} not found!`)
+                return
+            }
+            player.health = msg.new_health
         } else if (msg.type === "world_snapshot") {
             for (const player of msg.players) {
                 this.players.set(player.id, {
@@ -128,6 +135,7 @@ class Game {
                     x: player.x,
                     y: player.y,
                     angle: player.angle,
+                    health: player.health,
                 })
             }
             for (const shape of msg.shapes) {
@@ -144,6 +152,7 @@ class Game {
                 x: 0,
                 y: 0,
                 angle: 0,
+                health: 0,
             })
             this.notifications.push({
                 message: `${msg.username} joined`,
@@ -315,11 +324,11 @@ class Game {
             }
         }
 
-        for (const { x, y, username, id } of this.players.values()) {
+        for (const { x, y, username, id, health } of this.players.values()) {
             ctx.fillStyle = "black"
             ctx.font = "12pt sans-serif"
             ctx.textAlign = "center"
-            ctx.fillText(`${username}(${id})`, x, y - 20)
+            ctx.fillText(`#${id} ${username} (${health} HP)`, x, y - 20)
         }
 
         this.notifications.forEach((notif) => {
@@ -356,6 +365,7 @@ type Player = {
     x: number
     y: number
     angle: number
+    health: number
 }
 
 type Box = {
@@ -378,6 +388,7 @@ namespace schema {
         x: number
         y: number
         angle: number
+        health: number
     }
     export type ShapeIntro =
         | { kind: "box"; x: number; y: number; width: number; height: number }
@@ -395,6 +406,11 @@ namespace schema {
               x: number
               y: number
               angle: number
+          }
+        | {
+              type: "player_health_changed"
+              id: number
+              new_health: number
           }
         | { type: "bullet_position"; id: number; x: number; y: number }
         | { type: "bullet_gone"; id: number }

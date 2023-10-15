@@ -228,6 +228,9 @@ async def game_loop(
             # Networking
             systems.networking_system,
             systems.disconnect_players_system,
+            # Health (must be last)
+            systems.apply_health_system,
+            systems.clear_health_change_system,
         )
         _init_buildings(world)
         world.commit()
