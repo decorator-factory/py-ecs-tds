@@ -1,5 +1,4 @@
 import itertools
-import random
 from typing import (
     Iterable,
     NamedTuple,
@@ -273,7 +272,7 @@ def apply_bullet_collision_system(
     collisions: Query[Bullet, Velocity, Collisions],
     solids: Query[Solid],
 ) -> None:
-    delta = w[TIME_DELTA]
+    w[TIME_DELTA]
     for e, _, [velocity], [contacts] in collisions.all():
         for other, push in contacts:
             if solids.get(other):

@@ -1,6 +1,6 @@
 from __future__ import annotations
-import random
 
+import random
 import time
 from contextlib import (
     asynccontextmanager,
@@ -205,7 +205,6 @@ def _init_buildings(w: systems.World) -> None:
 
     shapes = []
 
-
     top = Box(Vec(-10, -10), Vec(width + 10, 0))
     left = Box(Vec(-10, -10), Vec(0, height + 10))
     right = left.shift(Vec(width + 10, 0))
@@ -217,39 +216,31 @@ def _init_buildings(w: systems.World) -> None:
         right,
         top,
         bottom,
-
         # Main circle
         Circle(Vec(600, 300), 90),
         Circle(Vec(630, 80), 20),
-
         # Right whistle
         Circle(Vec(790, 115), 50),
         Box(Vec(790, 115), Vec(840, 325)),
-
         # Right slit
         Box(Vec(730, 370), Vec(743, 450)),
         Box(Vec(700, 485), Vec(713, 560)),
         Box(Vec(683, 485), Vec(730, 500)),
-
         # Bottom-right long wall
         Box(Vec(840, 485), Vec(1110, 510)),
-
         # Garbage on the right
         Circle(Vec(955, 345), 30),
         Circle(Vec(1070, 300), 30),
         Box(Vec(930, 200), Vec(980, 250)),
         Circle(Vec(1000, 100), 40),
-
         # Top-left long wall
         Box(Vec(62, 76), Vec(390, 130)),
-
         # Left whistle
         Circle(Vec(320, 450), 50),
         Box(Vec(270, 380), Vec(320, 450)),
         Box(Vec(270, 290), Vec(320, 340)),
-
         # Litte circle boi
-        Circle(Vec(155, 450), 20)
+        Circle(Vec(155, 450), 20),
     ]
 
     for shape in shapes:
