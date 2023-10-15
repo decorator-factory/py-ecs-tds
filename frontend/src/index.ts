@@ -225,7 +225,7 @@ class Game {
 
         this.canvas.addEventListener("mousedown", (e) => {
             this.sendMessage({ type: "rotate", radians: this.clientAngle })
-            this.rotateDebouncer.changeInterval(25)
+            this.rotateDebouncer.changeInterval(80)
             this.sendMessage({ type: "input_down", control: "fire" })
         })
 

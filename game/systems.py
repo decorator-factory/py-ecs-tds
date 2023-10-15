@@ -279,7 +279,7 @@ def apply_bullet_collision_system(
     for e, _, [velocity], [contacts] in collisions.all():
         for other, push in contacts:
             if solids.get(other):
-                if -0.5 <= velocity.alignment(push) <= 0.5:
+                if -0.6 <= velocity.alignment(push) <= 0.6:
                     # Ricochet
                     w.schedule_tweak(
                         e,
