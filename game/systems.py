@@ -277,12 +277,12 @@ def apply_bullet_collision_system(
     for e, _, [velocity], [contacts] in collisions.all():
         for other, push in contacts:
             if solids.get(other):
-                if -0.5 <= velocity.alignment(push) <= 0.5:
+                if -0.6 <= velocity.alignment(push) <= 0.6:
                     # Ricochet
                     w.schedule_tweak(
                         e,
                         Velocity,
-                        lambda v, push=push: Velocity((v.value + push / delta) * 0.9),
+                        lambda v, push=push: Velocity((v.value + push * 100) * 0.9),
                     )
                     w.schedule_tweak(e, Position, lambda p, push=push: Position(p.value + push * 3))
                 else:
@@ -476,13 +476,13 @@ def disconnect_players_system(
 
 def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
     direction = Vec.from_angle(angle)
-    velocity = direction * 500
+    velocity = direction * 600
     w.spawn(
         Position(pos + direction * 21),
         Velocity(velocity),
-        CircleCollider(Circle(Vec(0, 0), radius=3)),
+        CircleCollider(Circle(Vec(0, 0), radius=4)),
         Bullet(parent),
-        TimeToLive(1.0),
+        TimeToLive(0.5),
         Fresh(),
     )
 

@@ -276,7 +276,7 @@ class Game {
         ctx.fillStyle = "black"
         for (const { x, y } of this.bullets.values()) {
             ctx.beginPath()
-            ctx.arc(x, y, 3, 0, Math.PI * 2)
+            ctx.arc(x, y, 4, 0, Math.PI * 2)
             ctx.fill()
         }
 

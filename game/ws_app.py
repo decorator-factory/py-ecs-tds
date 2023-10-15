@@ -227,8 +227,9 @@ def _init_buildings(w: systems.World) -> None:
         Box(Vec(790, 115), Vec(840, 325)),
 
         # Right slit
-        Box(Vec(730, 370), Vec(743, 455)),
+        Box(Vec(730, 370), Vec(743, 450)),
         Box(Vec(700, 485), Vec(713, 560)),
+        Box(Vec(683, 485), Vec(730, 500)),
 
         # Bottom-right long wall
         Box(Vec(840, 485), Vec(1110, 510)),
@@ -256,10 +257,6 @@ def _init_buildings(w: systems.World) -> None:
             systems.add_solid_circle(w, shape)
         else:
             systems.add_solid_box(w, shape)
-
-    # systems.add_solid_box(w, Box(Vec(50, 200), Vec(90, 400)))
-    # systems.add_solid_box(w, Box(Vec(50, 270), Vec(150, 330)))
-    # systems.add_solid_circle(w, Circle(Vec(500, 300), 80))
 
 
 async def game_loop(
@@ -298,7 +295,8 @@ async def game_loop(
             Vec(210, 170),
             Vec(1080, 170),
             Vec(524, 510),
-            Vec(500, 75),        )
+            Vec(500, 75),
+        )
 
         ticker = Ticker(fps)
 
