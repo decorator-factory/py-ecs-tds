@@ -155,7 +155,6 @@ async def client_ws_handler(ws: WebSocket) -> None:
 
     while True:
         message = parse_message(await ws.receive_json())
-        print(message)
         if isinstance(message, ClientHello):
             username = message.username
             break
@@ -214,18 +213,20 @@ async def game_loop(
         world[systems.NET_INBOX] = state.inbox()
         world[systems.NET_OUTBOX] = state.outbox()
         world.add_systems(
+            # Generic
+            systems.ttl_system,
+            systems.remove_gone_system,
             # Movement and collisions
             systems.movement_system,
             systems.detect_collisions_system,
             systems.apply_player_collision_system,
             systems.remove_collisions_system,
+            systems.apply_bullet_collision_system,
             # Handling input
             systems.apply_inputs_system,
             # Networking
             systems.networking_system,
             systems.disconnect_players_system,
-            # Diagnostics
-            systems.debug_system,
         )
         _init_buildings(world)
         world.commit()
@@ -242,11 +243,9 @@ async def game_loop(
             for client_id in state.leave_queue().pop():
                 systems.disconnect_player(world, client_id)
 
+            delta = time.monotonic() - last_simulation
+            world[systems.TIME_DELTA] = delta
             world.commit()
-
-            t = time.monotonic()
-            since_last_simulation = t - last_simulation
-            world[systems.TIME_DELTA] = since_last_simulation
             world.step()
             last_simulation = time.monotonic()
 

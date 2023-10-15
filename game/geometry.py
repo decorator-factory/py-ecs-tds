@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from math import sqrt
 
@@ -9,6 +10,27 @@ class Vec:
     x: float
     y: float
 
+    def dot_product(self, other: Vec) -> float:
+        return self.x * other.x + self.y * other.y
+
+    def alignment(self, other: Vec) -> float:
+        """
+        How much one vector 'aligns' with the other.
+        Ranges from -1.0 (opposites) to 1.0 (equal).
+
+        a.alignment(b) ~= b.alignment(a)
+        """
+        prod = self.length() * other.length()
+        if prod == 0.0:
+            return 0.0
+        return self.dot_product(other) / prod
+
+    @staticmethod
+    def from_angle(angle: float) -> Vec:
+        cos = math.cos(angle)
+        sin = math.sqrt(1 - cos**2)
+        return Vec(cos, sin)
+
     def __add__(self, other: Vec) -> Vec:
         return Vec(self.x + other.x, self.y + other.y)
 
@@ -17,6 +39,9 @@ class Vec:
 
     def __mul__(self, other: float) -> Vec:
         return Vec(self.x * other, self.y * other)
+
+    def __truediv__(self, other: float) -> Vec:
+        return self * (1 / other)
 
     def __neg__(self) -> Vec:
         return Vec(-self.x, -self.y)

@@ -40,6 +40,7 @@ type Notification = {
 
 class Game {
     private players: Map<number, Player>
+    private bullets: Map<number, { x: number; y: number }>
     private boxes: Box[]
     private circles: Circle[]
     private notifications: Notification[]
@@ -51,6 +52,7 @@ class Game {
         private canvas: HTMLCanvasElement,
     ) {
         this.players = new Map()
+        this.bullets = new Map()
         this.boxes = []
         this.circles = []
         this.notifications = []
@@ -102,12 +104,28 @@ class Game {
             })
             this.notifications.push({
                 message: `${msg.username} joined`,
-                ttl: 10,
+                ttl: 6,
             })
-        } else if (msg.type === "player_left") {
-            const { username } = this.players.get(msg.id)!
-            this.notifications.push({ message: `${username} left`, ttl: 10 })
+        } else if (msg.type === "player_died") {
+            const player = this.players.get(msg.id)
+            if (!player) return
+            this.notifications.push({
+                message: `${player.username} died`,
+                ttl: 6,
+            })
             this.players.delete(msg.id)
+        } else if (msg.type === "player_left") {
+            const player = this.players.get(msg.id)
+            if (!player) return
+            this.notifications.push({
+                message: `${player.username} left`,
+                ttl: 6,
+            })
+            this.players.delete(msg.id)
+        } else if (msg.type === "bullet_position") {
+            this.bullets.set(msg.id, { x: msg.x, y: msg.y })
+        } else if (msg.type === "bullet_gone") {
+            this.bullets.delete(msg.id)
         } else if (msg.type === "bad_message") {
             console.error("We sent a bad message:", msg.error)
         }
@@ -123,8 +141,15 @@ class Game {
             ArrowRight: "right",
             ArrowDown: "down",
             ArrowUp: "up",
-            " ": "fire",
         }
+
+        this.canvas.addEventListener("mousedown", (e) => {
+            this.sendMessage({ type: "input_down", control: "fire" })
+        })
+
+        this.canvas.addEventListener("mouseup", (e) => {
+            this.sendMessage({ type: "input_up", control: "fire" })
+        })
 
         window.addEventListener("keydown", (e) => {
             const control = keyToControl[e.key]
@@ -181,6 +206,13 @@ class Game {
         for (const { x, y } of this.players.values()) {
             ctx.beginPath()
             ctx.arc(x, y, 20, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
+        ctx.fillStyle = "black"
+        for (const { x, y } of this.bullets.values()) {
+            ctx.beginPath()
+            ctx.arc(x, y, 4, 0, Math.PI * 2)
             ctx.fill()
         }
 
@@ -255,7 +287,10 @@ namespace schema {
         | { type: "goodbye" }
         | { type: "player_joined"; id: number; username: string }
         | { type: "player_left"; id: number }
+        | { type: "player_died"; id: number }
         | { type: "player_position"; id: number; x: number; y: number }
+        | { type: "bullet_position"; id: number; x: number; y: number }
+        | { type: "bullet_gone"; id: number }
         | {
               type: "world_snapshot"
               players: PlayerIntro[]

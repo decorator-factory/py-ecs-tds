@@ -22,12 +22,15 @@ from game.geometry import (
 )
 from game.messages import (
     BoxIntro,
+    BulletGone,
+    BulletPosition,
     CircleIntro,
     ClientId,
     ClientMessage,
     Control,
     InputDown,
     InputUp,
+    PlayerDied,
     PlayerIntro,
     PlayerPosition,
     ServerGoodbye,
@@ -101,7 +104,7 @@ class TimeToLive(NamedTuple):
 
 
 class Collisions(NamedTuple):
-    items: list[tuple[Entity, Vec]]
+    contacts: list[tuple[Entity, Vec]]
 
 
 class Solid(NamedTuple):
@@ -113,6 +116,14 @@ class Character(NamedTuple):
     username: str
 
 
+class Weapon(NamedTuple):
+    cooldown: float
+
+
+class Bullet(NamedTuple):
+    parent: int
+
+
 class Remote(NamedTuple):
     client_id: ClientId
     needs_snapshot: bool
@@ -120,6 +131,17 @@ class Remote(NamedTuple):
 
 class DisconnectRequest(NamedTuple):
     client_id: ClientId
+
+
+class Gone(NamedTuple):
+    """
+    Component for things that are about to be deleted.
+
+    We need this for things like bullets which should 'die' in two phases:
+    1. mark them for death, so that on the next frame we can send a `BulletGone`
+       message to all the players
+    2. on the next frame the bullet shouldn't be able to kill anyone else!
+    """
 
 
 # Systems
@@ -131,9 +153,15 @@ class DisconnectRequest(NamedTuple):
 def ttl_system(w: World, items: Query[TimeToLive]) -> None:
     for entity, [ticks] in items.all():
         if ticks <= 0:
-            w.kill(entity)
+            w.unapply(entity, [TimeToLive])
+            w.apply(entity, [Gone()])
         else:
             w.apply(entity, [TimeToLive(ticks - w[TIME_DELTA])])
+
+
+def remove_gone_system(w: World, corpses: Query[Gone]) -> None:
+    for entity, _ in corpses.all():
+        w.kill(entity)
 
 
 # Movement and collisions
@@ -144,7 +172,7 @@ def detect_collisions_system(
     with_box: Query[Position, BoxCollider],
     with_circle: Query[Position, CircleCollider],
 ) -> None:
-    grouper = BboxGrouper[tuple[Entity, Box | Circle]](chunk_size=128.0)
+    grouper = BboxGrouper[tuple[Entity, Box | Circle]](chunk_size=64.0)
 
     for e, [pos], [box] in with_box.all():
         box = box.shift(pos)
@@ -184,13 +212,40 @@ def apply_player_collision_system(
     collisions: Query[Character, Position, Collisions],
     solids: Query[Solid],
     characters: Query[Character],
+    bullets: Query[Bullet],
 ) -> None:
-    for e, _char, [pos], [entries] in collisions.all():
+    for e, [player_id, *_], [pos], [contacts] in collisions.all():
         total_push = Vec(0, 0)
-        for other, push in entries:
+        for other, push in contacts:
             if solids.get(other) or characters.get(other):
                 total_push += push
+
+            if b := bullets.get(other):
+                if b[0].parent != player_id:
+                    w.apply(e, [Gone()])
+                    w.apply(other, [Gone()])
         w.schedule_tweak(e, Position, lambda p, dp=total_push: Position(p.value + dp))
+
+
+def apply_bullet_collision_system(
+    w: World,
+    collisions: Query[Bullet, Velocity, Collisions],
+    solids: Query[Solid],
+) -> None:
+    delta = w[TIME_DELTA]
+    for e, _, [velocity], [contacts] in collisions.all():
+        for other, push in contacts:
+            if solids.get(other):
+                if -0.5 <= velocity.alignment(push) <= 0.5:
+                    # Ricochet
+                    w.schedule_tweak(
+                        e,
+                        Velocity,
+                        lambda v, push=push: Velocity((v.value + push / delta) * 0.9),
+                    )
+                    w.schedule_tweak(e, Position, lambda p, push=push: Position(p.value + push * 3))
+                else:
+                    w.apply(e, [Gone()])
 
 
 def movement_system(
@@ -214,12 +269,19 @@ _directions = {
 
 def apply_inputs_system(
     w: World,
-    items: Query[InputSet, Speed],
+    items: Query[Character, Weapon, Position, InputSet, Speed],
 ) -> None:
-    for e, [controls], [speed] in items.all():
+    for e, [player_id, *_], [cooldown], [pos], [controls], [speed] in items.all():
         direction = Vec(0, 0)
         for control in controls:
             direction += _directions.get(control) or Vec(0, 0)
+
+        if cooldown > 0:
+            w.apply(e, [Weapon(cooldown=cooldown - w[TIME_DELTA])])
+        elif Control.fire in controls:
+            _spawn_bullet(w, parent=player_id, pos=pos, angle=0.0)
+            w.apply(e, [Weapon(cooldown=0.1)])
+
         w.apply(e, [Velocity(direction.normal() * speed)])
 
 
@@ -232,13 +294,23 @@ def networking_system(
     players: Query[Character, Position],
     circles: Query[Solid, Position, CircleCollider],
     boxes: Query[Solid, Position, BoxCollider],
+    bullets: Query[Bullet, Position],
+    corpses: Query[Gone],
 ) -> None:
     inbox = w[NET_INBOX]
     outbox = w[NET_OUTBOX]
 
-    if w[FRAME] % 4 == 0:  # JANKY HACK
-        for _e, [player_id, *_], [pos] in players.all():
+    for e, [player_id, *_], [pos] in players.all():
+        if corpses.get(e):
+            outbox.send_broadcast(PlayerDied(player_id))
+        elif w[FRAME] % 4 == 0:  # JANKY HACK
             outbox.send_broadcast(PlayerPosition(id=player_id, x=pos.x, y=pos.y))
+
+    for e, _, [pos] in bullets.all():
+        if corpses.get(e):
+            outbox.send_broadcast(BulletGone(e.num))
+        elif w[FRAME] % 2 == 0:  # JANKY HACK
+            outbox.send_broadcast(BulletPosition(e.num, pos.x, pos.y))
 
     snapshot: ServerMessage | None = None
 
@@ -276,15 +348,19 @@ def disconnect_players_system(
             w.kill(e)
 
 
-## Diagnostics
-
-
-def debug_system(w: World) -> None:
-    if w[FRAME] % 1000 == 0:
-        print("Delta, ms:", round(w[TIME_DELTA] * 1000, 2))
-
-
 # Utilities/shared logic
+
+
+def _spawn_bullet(w: World, parent: int, pos: Vec, angle: float) -> None:
+    direction = Vec.from_angle(angle)
+    velocity = direction * 500
+    w.spawn(
+        Position(pos + direction * 21),
+        Velocity(velocity),
+        CircleCollider(Circle(Vec(0, 0), radius=4)),
+        Bullet(parent),
+        TimeToLive(1.0),
+    )
 
 
 def add_solid_box(
@@ -316,6 +392,7 @@ def connect_new_player(
 ) -> None:
     w.spawn(
         Character(id=client_id.value, username=username),
+        Weapon(cooldown=0),
         Position(Vec(200, 200)),
         Velocity(Vec(0, 0)),
         Remote(client_id, needs_snapshot=True),
@@ -348,7 +425,7 @@ def _compute_snapshot_message(
     return WorldSnapshot(
         players=[
             PlayerIntro(player_id, username, pos.x, pos.y)
-            for e, [player_id, username], [pos] in players.all()
+            for e, [player_id, username, *_], [pos] in players.all()
         ],
         shapes=circle_intros + box_intros,
     )
