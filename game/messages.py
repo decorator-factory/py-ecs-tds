@@ -40,16 +40,23 @@ class InputUp:
     control: Control
 
 
+@frozen
+class Rotate:
+    radians: float
+
+
 ClientMessage = Union[
     ClientHello,
     InputDown,
     InputUp,
+    Rotate,
 ]
 
 CLIENT_MESSAGES: dict[str, type[ClientMessage]] = {
     "hello": ClientHello,
     "input_down": InputDown,
     "input_up": InputUp,
+    "rotate": Rotate,
 }
 
 
@@ -82,6 +89,7 @@ class PlayerPosition:
     id: int
     x: float
     y: float
+    angle: float
 
 
 @frozen
@@ -107,6 +115,7 @@ class PlayerIntro:
     username: str
     x: float
     y: float
+    angle: float
 
 
 @frozen

@@ -167,7 +167,7 @@ class World:
     def spawn_many(self, component_tuples: Iterable[Iterable[object]]) -> list[Entity]:
         return [self.spawn(*x) for x in component_tuples]
 
-    def apply(self, entity: Entity, components: Iterable[object], /) -> None:
+    def apply(self, entity: Entity, components: list[object] | tuple[object, ...], /) -> None:
         self._components_to_add.append((entity, components))
 
     def schedule_tweak(
@@ -175,7 +175,9 @@ class World:
     ) -> None:
         self._tweaks.append((entity, component_type, callback))
 
-    def apply_many(self, values: Iterable[tuple[Entity, Iterable[object]]], /) -> None:
+    def apply_many(
+        self, values: Iterable[tuple[Entity, list[object] | tuple[object, ...]]], /
+    ) -> None:
         self._components_to_add.extend(values)
 
     def unapply(self, entity: Entity, component_types: Iterable[type], /) -> None:

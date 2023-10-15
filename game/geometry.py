@@ -27,9 +27,7 @@ class Vec:
 
     @staticmethod
     def from_angle(angle: float) -> Vec:
-        cos = math.cos(angle)
-        sin = math.sqrt(1 - cos**2)
-        return Vec(cos, sin)
+        return Vec(math.cos(angle), math.sin(angle))
 
     def __add__(self, other: Vec) -> Vec:
         return Vec(self.x + other.x, self.y + other.y)

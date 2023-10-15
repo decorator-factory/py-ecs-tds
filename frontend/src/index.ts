@@ -38,6 +38,41 @@ type Notification = {
     ttl: number
 }
 
+class Debouncer<T> {
+    private lastMs: number
+    private lastValue: T | null
+    private timer: number | null
+
+    constructor(
+        private intervalMs: number,
+        private doSend: (value: T) => void,
+    ) {
+        this.lastMs = new Date().getTime()
+        this.timer = null
+        this.lastValue = null
+    }
+
+    public changeInterval(newIntervalMs: number) {
+        this.intervalMs = newIntervalMs
+    }
+
+    public send(value: T) {
+        const now = new Date().getTime()
+        const timeLeftMs = this.intervalMs - (now - this.lastMs)
+        if (timeLeftMs <= 0) {
+            this.doSend(value)
+            this.lastMs = now
+        } else {
+            this.lastValue = value
+            if (this.timer === null) {
+                this.timer = setTimeout(() => {
+                    this.doSend(this.lastValue!)
+                }, timeLeftMs)
+            }
+        }
+    }
+}
+
 class Game {
     private players: Map<number, Player>
     private bullets: Map<number, { x: number; y: number }>
@@ -45,6 +80,8 @@ class Game {
     private circles: Circle[]
     private notifications: Notification[]
     private myId: number | null
+    private rotateDebouncer: Debouncer<number>
+    private clientAngle: number = 0
 
     constructor(
         private ws: WebSocket,
@@ -57,6 +94,9 @@ class Game {
         this.circles = []
         this.notifications = []
         this.myId = null
+        this.rotateDebouncer = new Debouncer(200, (radians: number) => {
+            this.sendMessage({ type: "rotate", radians })
+        })
         ws.addEventListener("open", () => this.beginUpdate())
         ws.addEventListener("message", (e) => {
             const msg: schema.ServerMessage = JSON.parse(e.data)
@@ -79,6 +119,7 @@ class Game {
             }
             player.x = msg.x
             player.y = msg.y
+            player.angle = msg.angle
         } else if (msg.type === "world_snapshot") {
             for (const player of msg.players) {
                 this.players.set(player.id, {
@@ -86,6 +127,7 @@ class Game {
                     username: player.username,
                     x: player.x,
                     y: player.y,
+                    angle: player.angle,
                 })
             }
             for (const shape of msg.shapes) {
@@ -101,6 +143,7 @@ class Game {
                 username: msg.username,
                 x: 0,
                 y: 0,
+                angle: 0,
             })
             this.notifications.push({
                 message: `${msg.username} joined`,
@@ -131,6 +174,14 @@ class Game {
         }
     }
 
+    private myPlayer() {
+        if (this.myId === null) {
+            return null
+        } else {
+            return this.players.get(this.myId) || null
+        }
+    }
+
     beginUpdate() {
         const controls = new Set<schema.Control>()
 
@@ -144,11 +195,28 @@ class Game {
         }
 
         this.canvas.addEventListener("mousedown", (e) => {
+            this.sendMessage({ type: "rotate", radians: this.clientAngle })
+            this.rotateDebouncer.changeInterval(25)
             this.sendMessage({ type: "input_down", control: "fire" })
         })
 
         this.canvas.addEventListener("mouseup", (e) => {
+            this.rotateDebouncer.changeInterval(200)
             this.sendMessage({ type: "input_up", control: "fire" })
+        })
+
+        const recomputeAngle = () => {}
+
+        this.canvas.addEventListener("mousemove", (e) => {
+            const me = this.myPlayer()
+            if (me === null) return
+
+            const rect = this.canvas.getBoundingClientRect()
+            const mouseX = e.clientX - rect.left
+            const mouseY = e.clientY - rect.top
+            const radians = Math.atan2(mouseY - me.y, mouseX - me.x)
+            this.clientAngle = radians
+            this.rotateDebouncer.send(radians)
         })
 
         window.addEventListener("keydown", (e) => {
@@ -189,31 +257,62 @@ class Game {
         const ctx = this.canvas.getContext("2d")!
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
 
+        ctx.fillStyle = "black"
+        for (const { x, y } of this.bullets.values()) {
+            ctx.beginPath()
+            ctx.arc(x, y, 4, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
         ctx.fillStyle = "cyan"
         for (const { x, y, width, height } of this.boxes) {
             ctx.fillRect(x, y, width, height)
         }
 
         ctx.fillStyle = "cyan"
-        ctx.beginPath()
         for (const { x, y, radius } of this.circles) {
+            ctx.beginPath()
             ctx.arc(x, y, radius, 0, Math.PI * 2)
+            ctx.fill()
         }
-        ctx.closePath()
-        ctx.fill()
 
-        ctx.fillStyle = "red"
-        for (const { x, y } of this.players.values()) {
+        for (const { id, x, y, angle } of this.players.values()) {
+            const displayAngle = id === this.myId ? this.clientAngle : angle
+
+            // body
+            ctx.fillStyle = "red"
             ctx.beginPath()
             ctx.arc(x, y, 20, 0, Math.PI * 2)
             ctx.fill()
-        }
 
-        ctx.fillStyle = "black"
-        for (const { x, y } of this.bullets.values()) {
-            ctx.beginPath()
-            ctx.arc(x, y, 4, 0, Math.PI * 2)
-            ctx.fill()
+            // eyes
+            const deltaAngle = (30 * Math.PI) / 180
+            for (const a of [
+                displayAngle - deltaAngle,
+                displayAngle + deltaAngle,
+            ]) {
+                ctx.beginPath()
+                ctx.fillStyle = "white"
+                ctx.arc(
+                    x + Math.cos(a) * 16,
+                    y + Math.sin(a) * 16,
+                    4,
+                    0,
+                    Math.PI * 2,
+                )
+                ctx.fill()
+
+                ctx.beginPath()
+                ctx.fillStyle = "black"
+                ctx.arc(
+                    x + Math.cos(a) * 18,
+                    y + Math.sin(a) * 18,
+                    2,
+                    0,
+                    Math.PI * 2,
+                )
+                ctx.fill()
+            }
         }
 
         for (const { x, y, username, id } of this.players.values()) {
@@ -256,6 +355,7 @@ type Player = {
     username: string
     x: number
     y: number
+    angle: number
 }
 
 type Box = {
@@ -277,6 +377,7 @@ namespace schema {
         username: string
         x: number
         y: number
+        angle: number
     }
     export type ShapeIntro =
         | { kind: "box"; x: number; y: number; width: number; height: number }
@@ -288,7 +389,13 @@ namespace schema {
         | { type: "player_joined"; id: number; username: string }
         | { type: "player_left"; id: number }
         | { type: "player_died"; id: number }
-        | { type: "player_position"; id: number; x: number; y: number }
+        | {
+              type: "player_position"
+              id: number
+              x: number
+              y: number
+              angle: number
+          }
         | { type: "bullet_position"; id: number; x: number; y: number }
         | { type: "bullet_gone"; id: number }
         | {
@@ -304,4 +411,5 @@ namespace schema {
         | { type: "hello"; username: string }
         | { type: "input_down"; control: Control }
         | { type: "input_up"; control: Control }
+        | { type: "rotate"; radians: number }
 }

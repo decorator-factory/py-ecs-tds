@@ -1,5 +1,6 @@
 import itertools
 from typing import (
+    Iterable,
     NamedTuple,
     Protocol,
     Sequence
@@ -33,6 +34,7 @@ from game.messages import (
     PlayerDied,
     PlayerIntro,
     PlayerPosition,
+    Rotate,
     ServerGoodbye,
     ServerMessage,
     WorldSnapshot
@@ -87,6 +89,10 @@ class Position(NamedTuple):
     value: Vec
 
 
+class Orientation(NamedTuple):
+    radians: float
+
+
 class Speed(NamedTuple):
     magnitude: float
 
@@ -111,7 +117,7 @@ class Solid(NamedTuple):
     pass
 
 
-class Character(NamedTuple):
+class Player(NamedTuple):
     id: int
     username: str
 
@@ -209,15 +215,15 @@ def remove_collisions_system(
 
 def apply_player_collision_system(
     w: World,
-    collisions: Query[Character, Position, Collisions],
+    collisions: Query[Player, Position, Collisions],
     solids: Query[Solid],
-    characters: Query[Character],
+    players: Query[Player],
     bullets: Query[Bullet],
 ) -> None:
     for e, [player_id, *_], [pos], [contacts] in collisions.all():
         total_push = Vec(0, 0)
         for other, push in contacts:
-            if solids.get(other) or characters.get(other):
+            if solids.get(other) or players.get(other):
                 total_push += push
 
             if b := bullets.get(other):
@@ -269,9 +275,9 @@ _directions = {
 
 def apply_inputs_system(
     w: World,
-    items: Query[Character, Weapon, Position, InputSet, Speed],
+    items: Query[Player, Orientation, Weapon, Position, InputSet, Speed],
 ) -> None:
-    for e, [player_id, *_], [cooldown], [pos], [controls], [speed] in items.all():
+    for e, [player_id, *_], [angle], [cooldown], [pos], [controls], [speed] in items.all():
         direction = Vec(0, 0)
         for control in controls:
             direction += _directions.get(control) or Vec(0, 0)
@@ -279,7 +285,7 @@ def apply_inputs_system(
         if cooldown > 0:
             w.apply(e, [Weapon(cooldown=cooldown - w[TIME_DELTA])])
         elif Control.fire in controls:
-            _spawn_bullet(w, parent=player_id, pos=pos, angle=0.0)
+            _spawn_bullet(w, parent=player_id, pos=pos, angle=angle)
             w.apply(e, [Weapon(cooldown=0.1)])
 
         w.apply(e, [Velocity(direction.normal() * speed)])
@@ -291,7 +297,7 @@ def apply_inputs_system(
 def networking_system(
     w: World,
     remotes: Query[Remote, InputSet],
-    players: Query[Character, Position],
+    players: Query[Player, Position, Orientation],
     circles: Query[Solid, Position, CircleCollider],
     boxes: Query[Solid, Position, BoxCollider],
     bullets: Query[Bullet, Position],
@@ -300,11 +306,11 @@ def networking_system(
     inbox = w[NET_INBOX]
     outbox = w[NET_OUTBOX]
 
-    for e, [player_id, *_], [pos] in players.all():
+    for e, [player_id, *_], [pos], [angle] in players.all():
         if corpses.get(e):
             outbox.send_broadcast(PlayerDied(player_id))
-        elif w[FRAME] % 4 == 0:  # JANKY HACK
-            outbox.send_broadcast(PlayerPosition(id=player_id, x=pos.x, y=pos.y))
+        elif w[FRAME] % 2 == 0:  # JANKY HACK
+            outbox.send_broadcast(PlayerPosition(id=player_id, x=pos.x, y=pos.y, angle=angle))
 
     for e, _, [pos] in bullets.all():
         if corpses.get(e):
@@ -323,9 +329,16 @@ def networking_system(
                 case InputUp(control):
                     inputs.discard(control)
 
+                case Rotate(radians):
+                    w.apply(e, [Orientation(radians)])
+
         if needs_snapshot:
             if snapshot is None:
-                snapshot = _compute_snapshot_message(players, circles, boxes)
+                snapshot = _compute_snapshot_message(
+                    players=((pos, player, angle) for _, player, [pos], [angle] in players.all()),
+                    circles=((pos, circle) for _, _, [pos], [circle] in circles.all()),
+                    boxes=((pos, box) for _, _, [pos], [box] in boxes.all()),
+                )
 
             outbox.send_single(client_id, snapshot)
             w.apply(e, [Remote(client_id, needs_snapshot=False)])
@@ -391,9 +404,10 @@ def connect_new_player(
     username: str,
 ) -> None:
     w.spawn(
-        Character(id=client_id.value, username=username),
+        Player(id=client_id.value, username=username),
         Weapon(cooldown=0),
         Position(Vec(200, 200)),
+        Orientation(radians=0),
         Velocity(Vec(0, 0)),
         Remote(client_id, needs_snapshot=True),
         InputSet(set()),
@@ -410,22 +424,20 @@ def disconnect_player(
 
 
 def _compute_snapshot_message(
-    players: Query[Character, Position],
-    circles: Query[Solid, Position, CircleCollider],
-    boxes: Query[Solid, Position, BoxCollider],
+    players: Iterable[tuple[Vec, Player, float]],
+    circles: Iterable[tuple[Vec, Circle]],
+    boxes: Iterable[tuple[Vec, Box]],
 ) -> ServerMessage:
-    circle_intros = [
-        CircleIntro(pos.x, pos.y, circle.radius) for e, _, [pos], [circle] in circles.all()
-    ]
+    circle_intros = [CircleIntro(pos.x, pos.y, circle.radius) for pos, circle in circles]
     box_intros = [
         BoxIntro((pos + box.tl).x, (pos + box.tl).y, box.width(), box.height())
-        for e, _, [pos], [box] in boxes.all()
+        for pos, box in boxes
     ]
 
     return WorldSnapshot(
         players=[
-            PlayerIntro(player_id, username, pos.x, pos.y)
-            for e, [player_id, username, *_], [pos] in players.all()
+            PlayerIntro(player.id, player.username, pos.x, pos.y, angle)
+            for pos, player, angle in players
         ],
         shapes=circle_intros + box_intros,
     )

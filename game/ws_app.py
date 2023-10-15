@@ -173,6 +173,7 @@ async def client_ws_handler(ws: WebSocket) -> None:
                 msg = parse_message(json)
             except LoadError as exc:
                 error_msg = BadMessage(asdict(exc))
+                print(f"Got bad message from {handle.client_id}:", error_msg)
                 await ws.send_json(serialize_message(error_msg))
             else:
                 game_state.inbox().append(handle.client_id, msg)
