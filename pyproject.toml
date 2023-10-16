@@ -13,6 +13,7 @@ uvicorn = {extras = ["standard"], version = "^0.23.2"}
 adaptix = "^3.0.0a5"
 attrs = "^23.1.0"
 anyio = "^4.0.0"
+orjson = "^3.9.9"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.2"

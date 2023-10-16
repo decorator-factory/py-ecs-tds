@@ -101,8 +101,10 @@ class Game {
             this.sendMessage({ type: "rotate", radians })
         })
         ws.addEventListener("open", () => this.beginUpdate())
-        ws.addEventListener("message", (e) => {
-            const msg: schema.ServerMessage = JSON.parse(e.data)
+        ws.addEventListener("message", async (e) => {
+            const msg: schema.ServerMessage = JSON.parse(
+                typeof e.data === "string" ? e.data : await e.data.text(),
+            )
             this.processMessage(msg)
         })
     }

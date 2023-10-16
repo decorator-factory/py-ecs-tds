@@ -4,7 +4,11 @@ from typing import (
     Union
 )
 
-from adaptix import Retort
+import orjson
+from adaptix import (
+    Retort,
+    dumper
+)
 from adaptix.load_error import MsgError
 from attr import frozen
 
@@ -195,19 +199,25 @@ SERVER_MESSAGES: dict[type[ServerMessage], str] = {
 ###
 
 
-retort = Retort()
+retort = Retort(
+    recipe=[
+        dumper(float, lambda f: orjson.Fragment(b"%.2f" % f)),
+    ]
+)
 
 
-def serialize_message(message: ServerMessage) -> object:
+def serialize_message(message: ServerMessage) -> bytes:
     kind = SERVER_MESSAGES[type(message)]
-    return {
-        "type": kind,
-        **retort.dump(message, type(message)),
-    }
+    return orjson.dumps(
+        {
+            "type": kind,
+            **retort.dump(message, type(message)),
+        }
+    )
 
 
-def parse_message(message: object) -> ClientMessage:
-    match message:
+def parse_message(raw: bytes | str) -> ClientMessage:
+    match orjson.loads(raw):
         case {"type": str(kind), **rest}:
             if message_class := CLIENT_MESSAGES.get(kind):
                 ok = retort.load(rest, message_class)

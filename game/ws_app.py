@@ -93,7 +93,7 @@ class PlayerQueue:
 class PlayerHandle:
     def __init__(self, client_id: ClientId) -> None:
         self.client_id = client_id
-        self.send, self.recv = anyio.create_memory_object_stream[list[object]](10)
+        self.send, self.recv = anyio.create_memory_object_stream[list[bytes]](10)
 
 
 class GameState:
@@ -135,7 +135,7 @@ class GameState:
         self._handles[client_id] = handle
         self._join_queue.add(client_id)
         self._player_usernames[client_id] = username
-        print(f"Player {client_id} connected")
+        print(f"Player #{client_id} ({username!r}) connected")
         self._outbox.send_broadcast(PlayerJoined(id=client_id.value, username=username))
         try:
             yield handle
@@ -155,7 +155,7 @@ async def client_ws_handler(ws: WebSocket) -> None:
     game_state = APP_GAME_STATE[ws.app]
 
     while True:
-        message = parse_message(await ws.receive_json())
+        message = parse_message(await ws.receive_text())
         if isinstance(message, ClientHello):
             username = message.username
             break
@@ -166,16 +166,16 @@ async def client_ws_handler(ws: WebSocket) -> None:
                 for msg in bundle:
                     if ws.client_state == WebSocketState.DISCONNECTED:
                         return
-                    await ws.send_json(msg)
+                    await ws.send_bytes(msg)
 
     async def _read_inputs_from_player() -> None:
-        async for json in ws.iter_json():
+        async for json in ws.iter_text():
             try:
                 msg = parse_message(json)
             except LoadError as exc:
                 error_msg = BadMessage(asdict(exc))
                 print(f"Got bad message from {handle.client_id}:", error_msg)
-                await ws.send_json(serialize_message(error_msg))
+                await ws.send_bytes(serialize_message(error_msg))
             else:
                 game_state.inbox().append(handle.client_id, msg)
 
